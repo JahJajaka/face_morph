@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  face_morph:
+    build:
+      context: face_morph
+    env_file:
+      - dev.env
+    tty: true
+    volumes:
+      - /Users/evgeniic/repos/mark_birthday/face_morph:/face_morph

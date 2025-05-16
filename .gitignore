@@ -184,4 +184,7 @@ cython_debug/
 
 dev.env
 credentials
-video_output.mp4
+*.mp4
+*.mp3
+aligned_images
+*.csv

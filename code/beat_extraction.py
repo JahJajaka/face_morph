@@ -5,6 +5,7 @@ Analyzes audio files and extracts beat timestamps to a CSV file.
 
 Usage:
   python beat_extraction.py --input song.mp3 --output beats.csv [--threshold 0.1] [--min_bpm 60] [--max_bpm 180]
+  python beat_extraction.py --input song.mp3 --output beats.csv
 """
 
 import argparse

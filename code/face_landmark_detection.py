@@ -6,7 +6,8 @@ import numpy as np
 from skimage import io
 import cv2
 from imutils import face_utils
-DEFECTED = ['165.jpg', '177.jpg', '185.jpg', '186.jpg', '190.jpg', '199.jpg', '202.jpg', '206.jpg']
+#DEFECTED = ['165.jpg', '177.jpg', '185.jpg', '186.jpg', '190.jpg', '199.jpg', '202.jpg', '206.jpg']
+DEFECTED = []
 class NoFaceFound(Exception):
    """Raised when there is no face found"""
    pass

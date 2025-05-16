@@ -46,30 +46,37 @@ if __name__ == "__main__":
 		img1 = cv2.imread(args.img1)
 		img2 = cv2.imread(args.img2)
 		doMorphing(img1, img2, args.duration, args.frame, args.output)
-    
 	if(args.folder):
 		imgFolder = args.folder
-		listImg = os.listdir(imgFolder)
-        
+		listImg = sorted(os.listdir(imgFolder))
+		
+		# Check if imageslist.txt exists and read already processed videos
+		processed_videos = []
+		if os.path.exists('imageslist.txt'):
+			with open('imageslist.txt', 'r') as f:
+				for line in f:
+					if line.startswith("file '"):
+						video_path = line.strip()[6:-1]  # Extract path between "file '" and "'"
+						processed_videos.append(video_path)
+		
 		outputList = []
 		for i in range(0, len(listImg)-1):
-			print("on traite le morphing des images "+listImg[i]+" et "+ listImg[i+1])
-			img1 = cv2.imread(os.path.join(imgFolder,listImg[i]))
-			img2 = cv2.imread(os.path.join(imgFolder, listImg[i+1]))
-			doMorphing(img1, img2, args.duration, args.frame, args.tmpfolder + str(i)+"_"+args.output, [listImg[i],listImg[i+1]])
-			outputList.append("file '"+ args.tmpfolder + str(i)+"_"+args.output+"'")
-
-		# for i in range(0, len(listImg)-1):
-		# 	print("on traite le morphing des images "+listImg[i]+" et "+ "no_face_177.jpg")
-		# 	img1 = cv2.imread(os.path.join(imgFolder,listImg[i]))
-		# 	img2 = cv2.imread(os.path.join(imgFolder, 'no_face_177.jpg'))
-		# 	doMorphing(img1, img2, args.duration, args.frame, args.tmpfolder + str(i)+"_"+args.output, [listImg[i],'no_face_177.jpg'])
-		# 	outputList.append("file '"+ args.tmpfolder + str(i)+"_"+args.output+"'")
+			# Check if video already exists
+			video_path = args.tmpfolder + str(i) + "_" + args.output
+			if video_path in processed_videos and os.path.exists(video_path):
+				print(f"Skipping morphing for {listImg[i]} and {listImg[i+1]} - video already exists")
+				outputList.append(f"file '{video_path}'")
+			else:
+				print("on traite le morphing des images "+listImg[i]+" et "+ listImg[i+1])
+				img1 = cv2.imread(os.path.join(imgFolder,listImg[i]))
+				img2 = cv2.imread(os.path.join(imgFolder, listImg[i+1]))
+				doMorphing(img1, img2, args.duration, args.frame, video_path, [listImg[i],listImg[i+1]])
+				outputList.append(f"file '{video_path}'")
 
 		f=open('imageslist.txt','w')
 		s1='\n'.join(outputList)
 		f.write(s1)
 		f.close()
-		
-    # merge all the temporary videos into one
+			
+		# merge all the temporary videos into one
 	os.system('ffmpeg -f concat -safe 0 -i imageslist.txt -c copy ' + args.output)

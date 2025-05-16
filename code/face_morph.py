@@ -72,8 +72,8 @@ def generate_morph_sequence(duration,frame_rate,img1,img2,points1,points2,tri_li
         alpha = j/(num_images-1)
 
         # Compute weighted average point coordinates
-        print(len(points1))
-        print(len(points2))
+        #print(len(points1))
+        #print(len(points2))
         for i in range(0, len(points1)):
             x = (1 - alpha) * points1[i][0] + alpha * points2[i][0]
             y = (1 - alpha) * points1[i][1] + alpha * points2[i][1]

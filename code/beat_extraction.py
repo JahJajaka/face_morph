@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Beat extraction tool for face morphing synchronization.
-Analyzes audio files and extracts beat timestamps to a CSV file.
+Beat and rhythmic feature extraction tool for face morphing synchronization.
+Analyzes audio files and extracts beat timestamps and rhythmic features to CSV files.
 
 Usage:
   python beat_extraction.py --input song.mp3 --output beats.csv [--threshold 0.1] [--min_bpm 60] [--max_bpm 180]
-  python beat_extraction.py --input song.mp3 --output beats.csv
+  python beat_extraction.py --input sigma_boy.mp3 --output beats.csv --extract_rhythmic
 """
 
 import argparse
@@ -148,10 +148,124 @@ def save_beats_to_csv(beat_times, beat_strengths, output_file):
     
     print(f"Beat information saved to {output_file}")
 
+
+def extract_rhythmic_features(audio_file, duration=None):
+    """
+    Extract rhythmic features from an audio file.
+    
+    Args:
+        audio_file (str): Path to the audio file
+        duration (float): Optional duration to analyze (None means full file)
+        
+    Returns:
+        dict: Dictionary containing tempogram, fourier_tempogram, and tempogram_ratio features
+    """
+    print(f"Loading audio file for rhythmic analysis: {audio_file}")
+    
+    # Load the audio file
+    y, sr = librosa.load(audio_file, sr=None, duration=duration)
+    
+    # Compute onset envelope
+    hop_length = 512  # Default hop size
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
+    
+    # Compute tempogram
+    tempogram = librosa.feature.tempogram(onset_envelope=onset_env, sr=sr, hop_length=hop_length)
+    
+    # Compute fourier tempogram
+    fourier_tempogram = librosa.feature.fourier_tempogram(y=y, sr=sr, hop_length=hop_length)
+    
+    # Compute tempogram ratio
+    tempogram_ratio = librosa.feature.tempogram_ratio(onset_envelope=onset_env, sr=sr, hop_length=hop_length)
+    
+    # Get timestamps for each frame
+    frame_times = librosa.frames_to_time(np.arange(tempogram.shape[1]), sr=sr, hop_length=hop_length)
+    
+    return {
+        'frame_times': frame_times,
+        'tempogram': tempogram,
+        'fourier_tempogram': fourier_tempogram,
+        'tempogram_ratio': tempogram_ratio
+    }
+
+def save_tempogram_to_csv(frame_times, tempogram, output_file):
+    """
+    Save tempogram data to a CSV file.
+    
+    Args:
+        frame_times (array): Array of frame timestamps
+        tempogram (array): Tempogram feature matrix
+        output_file (str): Path to the output CSV file
+    """
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        # Create header with tempo bins
+        header = ['timestamp'] + [f'tempo_bin_{i}' for i in range(tempogram.shape[0])]
+        writer.writerow(header)
+        
+        # Write each frame's data
+        for i, time in enumerate(frame_times):
+            if i < tempogram.shape[1]:
+                row = [f"{time:.6f}"] + [f"{val:.6f}" for val in tempogram[:, i]]
+                writer.writerow(row)
+    
+    print(f"Tempogram data saved to {output_file}")
+
+def save_fourier_tempogram_to_csv(frame_times, fourier_tempogram, output_file):
+    """
+    Save Fourier tempogram data to a CSV file.
+    
+    Args:
+        frame_times (array): Array of frame timestamps
+        fourier_tempogram (array): Fourier tempogram feature matrix
+        output_file (str): Path to the output CSV file
+    """
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        # Create header with frequency bins
+        header = ['timestamp'] + [f'freq_bin_{i}' for i in range(fourier_tempogram.shape[0])]
+        writer.writerow(header)
+        
+        # Write each frame's data
+        for i, time in enumerate(frame_times):
+            if i < fourier_tempogram.shape[1]:
+                # Convert complex values to magnitudes
+                magnitudes = np.abs(fourier_tempogram[:, i])
+                row = [f"{time:.6f}"] + [f"{val:.6f}" for val in magnitudes]
+                writer.writerow(row)
+    
+    print(f"Fourier tempogram data saved to {output_file}")
+
+def save_tempogram_ratio_to_csv(frame_times, tempogram_ratio, output_file):
+    """
+    Save tempogram ratio data to a CSV file.
+    
+    Args:
+        frame_times (array): Array of frame timestamps
+        tempogram_ratio (array): Tempogram ratio feature matrix
+        output_file (str): Path to the output CSV file
+    """
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        
+        # Create header with ratio bins
+        header = ['timestamp'] + [f'ratio_bin_{i}' for i in range(tempogram_ratio.shape[0])]
+        writer.writerow(header)
+        
+        # Write each frame's data
+        for i, time in enumerate(frame_times):
+            if i < tempogram_ratio.shape[1]:
+                row = [f"{time:.6f}"] + [f"{val:.6f}" for val in tempogram_ratio[:, i]]
+                writer.writerow(row)
+    
+    print(f"Tempogram ratio data saved to {output_file}")
+
 def main():
-    parser = argparse.ArgumentParser(description='Extract beats from audio file for face morphing')
+    parser = argparse.ArgumentParser(description='Extract beats and rhythmic features from audio file')
     parser.add_argument('--input', required=True, help='Input audio file path')
-    parser.add_argument('--output', required=True, help='Output CSV file path')
+    parser.add_argument('--output', required=True, help='Output CSV file base path (without extension)')
     parser.add_argument('--threshold', type=float, default=0.0, 
                         help='Onset strength threshold (0.0-1.0)')
     parser.add_argument('--min_bpm', type=int, default=60, 
@@ -160,6 +274,8 @@ def main():
                         help='Maximum tempo in BPM')
     parser.add_argument('--duration', type=float, default=None,
                         help='Duration in seconds to analyze (default: entire file)')
+    parser.add_argument('--extract_rhythmic', action='store_true',
+                        help='Extract additional rhythmic features (tempogram, etc.)')
     
     args = parser.parse_args()
     
@@ -167,6 +283,8 @@ def main():
         print(f"Error: Input file '{args.input}' not found")
         return
     
+    # Extract and save beats
+    beats_output = args.output if args.output.endswith('.csv') else f"{args.output}_beats.csv"
     beat_times, beat_strengths = extract_beats(
         args.input, 
         threshold=args.threshold,
@@ -175,7 +293,7 @@ def main():
         duration=args.duration
     )
     
-    save_beats_to_csv(beat_times, beat_strengths, args.output)
+    save_beats_to_csv(beat_times, beat_strengths, beats_output)
     
     print(f"Beat extraction complete - {len(beat_times)} beats detected")
     
@@ -184,6 +302,27 @@ def main():
         avg_bpm = 60 * (len(beat_times) - 1) / (beat_times[-1] - beat_times[0])
         print(f"Average BPM: {avg_bpm:.1f}")
         print(f"Audio duration: {beat_times[-1]:.2f} seconds")
+    
+    # Extract and save rhythmic features if requested
+    if args.extract_rhythmic:
+        print("Extracting rhythmic features...")
+        
+        # Create output file paths
+        base_output = args.output.replace('.csv', '')
+        tempogram_output = f"{base_output}_tempogram.csv"
+        fourier_output = f"{base_output}_fourier_tempogram.csv"
+        ratio_output = f"{base_output}_tempogram_ratio.csv"
+        
+        # Extract features
+        features = extract_rhythmic_features(args.input, duration=args.duration)
+        
+        # Save features to CSV files
+        save_tempogram_to_csv(features['frame_times'], features['tempogram'], tempogram_output)
+        save_fourier_tempogram_to_csv(features['frame_times'], features['fourier_tempogram'], fourier_output)
+        save_tempogram_ratio_to_csv(features['frame_times'], features['tempogram_ratio'], ratio_output)
+        
+        print("Rhythmic feature extraction complete")
+
 
 if __name__ == "__main__":
     main()

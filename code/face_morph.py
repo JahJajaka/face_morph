@@ -6,7 +6,8 @@ import math
 from subprocess import Popen, PIPE
 from PIL import Image
 
-def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, tri_list, size, output):
+
+def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, tri_list, size, output, beat_start=None, beat_end=None):
     """
     Generate a morphing sequence synchronized with beats.
     
@@ -14,6 +15,8 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
         beat_file (str): Path to the CSV file with beat information
         img1, img2, points1, points2, tri_list, size: Same as in original function
         output (str): Output video path
+        beat_start: Starting beat information for this segment
+        beat_end: Ending beat information for this segment
     """
     import csv
     import numpy as np
@@ -35,14 +38,22 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
         return
     
     # Calculate video parameters
-    total_duration = beats[-1]['timestamp']
-    # Add a bit extra to the end
-    total_duration += min(1.0, beats[-1]['timestamp'] - beats[-2]['timestamp'] if len(beats) > 1 else 1.0)
+    if beat_start and beat_end:
+        print(f"Using specific beat segment: {beat_start['beat_number']} to {beat_end['beat_number']}")
+        # Calculate duration from the specific beats
+        segment_duration = beat_end['timestamp'] - beat_start['timestamp']
+        # Add a small buffer to ensure we reach the end beat
+        total_duration = segment_duration * 1.05
+    else:
+        # Calculate video parameters from the whole beat file
+        total_duration = beats[-1]['timestamp']
+        # Add a bit extra to the end
+        total_duration += min(1.0, beats[-1]['timestamp'] - beats[-2]['timestamp'] if len(beats) > 1 else 1.0)
+    
     print(f"total duration: {total_duration}")
     # Frame rate should be high enough for smooth transitions
     frame_rate = 30
-    num_frames = int(total_duration * frame_rate)
-    
+    num_frames = int(total_duration * frame_rate)    
     # Start ffmpeg process
     p = Popen([
         'ffmpeg', '-y', '-f', 'image2pipe', '-r', str(frame_rate),
@@ -58,6 +69,22 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
     
     # Function to find alpha value at a given time
     def get_alpha_at_time(time):
+        # Handle specific beat segment if provided
+        if beat_start and beat_end:
+            # Calculate adjusted time relative to the start beat
+            adjusted_time = beat_start['timestamp'] + time
+            
+            # Check if we're outside the range
+            if adjusted_time <= beat_start['timestamp']:
+                return 0.0
+            if adjusted_time >= beat_end['timestamp']:
+                return 1.0
+                
+            # Linear interpolation between start and end beat
+            progress = (adjusted_time - beat_start['timestamp']) / (beat_end['timestamp'] - beat_start['timestamp'])
+            return progress
+        
+        # Standard beat processing for the whole file
         # Find the nearest beats before and after the current time
         prev_beat = next((b for b in reversed(beats) if b['timestamp'] <= time), beats[0])
         next_beat = next((b for b in beats if b['timestamp'] > time), beats[-1])
@@ -76,7 +103,8 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
         
         # Linear interpolation between beats
         return progress
-    
+
+
     # Generate frames
     for frame_num in range(num_frames):
         # Calculate current time

@@ -186,5 +186,5 @@ dev.env
 credentials
 *.mp4
 *.mp3
-aligned_images
+aligned_images*
 *.csv

@@ -9,8 +9,7 @@ import os
 import cv2
 
 def doMorphing(img1, img2, duration, frame_rate, output, img_paths=None, beats_file=None, beat_start=None, beat_end=None):
-
-	[size, img1, img2, points1, points2, list3] = generate_face_correspondences(img1, img2, img_paths)
+	[size, img1, img2, points1, points2, list3] = generate_face_correspondences(img1, img2, img_paths)	
 	print(f'size: {size}')
 	print(f'img1: {len(img1)}')
 	print(f'img2: {len(img2)}')
@@ -38,20 +37,15 @@ def doMorphing(img1, img2, duration, frame_rate, output, img_paths=None, beats_f
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--img1", help="The First Image")
-	parser.add_argument("--img2", help="The Second Image")
 	parser.add_argument("--folder", help="The folder with all images")
 	parser.add_argument("--duration", type=int, default=5, help="The duration")
 	parser.add_argument("--frame", type=int, default=20, help="The frameame Rate")
 	parser.add_argument("--output", help="Output Video Path")
 	parser.add_argument("--tmpfolder", default="tmp_videos/", help="The temporary folder to store intermediate videos")
 	parser.add_argument("--beats", help="Path to beats CSV file for synchronized morphing")
+	parser.add_argument("--beat_interval", type=int, default=1, help="Use every nth beat (default: 1)")
 	args = parser.parse_args()
 
-	if(args.img1 and args.img2):
-		img1 = cv2.imread(args.img1)
-		img2 = cv2.imread(args.img2)
-		doMorphing(img1, img2, args.duration, args.frame, args.output, beats_file=args.beats)
 	if(args.folder):
 		imgFolder = args.folder
 		listImg = sorted(os.listdir(imgFolder))
@@ -69,15 +63,22 @@ if __name__ == "__main__":
 						'timestamp': float(row['timestamp']),
 						'strength': float(row['strength']) if 'strength' in row else 0.5
 					})
-			
+
+			# Apply beat interval - only use beats at the specified interval
+			filtered_beats = [beat for i, beat in enumerate(beats) if i % args.beat_interval == 0]
+			print(f"Using {len(filtered_beats)} beats out of {len(beats)} total beats (interval: {args.beat_interval})")
+				
+			# Later in the code, use filtered_beats instead of beats:
+			beat_segments = min(len(listImg)-1, len(filtered_beats)-1)
+
+
+
 			# Ensure temp folder exists
 			if not os.path.exists(args.tmpfolder):
 				os.makedirs(args.tmpfolder)
 				
 			# Create individual morphs for each image pair, synchronized with corresponding beats
-			outputList = []
-			beat_segments = min(len(listImg)-1, len(beats)-1)  # Number of transitions we can make
-			
+			outputList = []			
 			for i in range(beat_segments):
 				img1_path = os.path.join(imgFolder, listImg[i])
 				img2_path = os.path.join(imgFolder, listImg[i+1])
@@ -88,8 +89,8 @@ if __name__ == "__main__":
 				img2 = cv2.imread(img2_path)
 				
 				# Use beat i and i+1 for this transition
-				beat_start = beats[i]
-				beat_end = beats[i+1]
+				beat_start = filtered_beats[i]
+				beat_end = filtered_beats[i+1]
 				
 				doMorphing(img1, img2, args.duration, args.frame, video_path, 
 						[listImg[i], listImg[i+1]], beats_file=args.beats, 

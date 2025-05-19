@@ -22,20 +22,6 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
     import numpy as np
     from PIL import Image
     from subprocess import Popen, PIPE
-
-    # Read beat information from CSV
-    beats = []
-    with open(beat_file, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            beats.append({
-                'timestamp': float(row['timestamp']),
-                'strength': float(row['strength'])
-            })
-    
-    if not beats:
-        print("No beats found in the file. Exiting.")
-        return
     
     # Calculate video parameters
     if beat_start and beat_end:
@@ -44,11 +30,7 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
         segment_duration = beat_end['timestamp'] - beat_start['timestamp']
         # Add a small buffer to ensure we reach the end beat
         total_duration = segment_duration * 1.05
-    else:
-        # Calculate video parameters from the whole beat file
-        total_duration = beats[-1]['timestamp']
-        # Add a bit extra to the end
-        total_duration += min(1.0, beats[-1]['timestamp'] - beats[-2]['timestamp'] if len(beats) > 1 else 1.0)
+
     
     print(f"total duration: {total_duration}")
     # Frame rate should be high enough for smooth transitions
@@ -83,26 +65,6 @@ def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, 
             # Linear interpolation between start and end beat
             progress = (adjusted_time - beat_start['timestamp']) / (beat_end['timestamp'] - beat_start['timestamp'])
             return progress
-        
-        # Standard beat processing for the whole file
-        # Find the nearest beats before and after the current time
-        prev_beat = next((b for b in reversed(beats) if b['timestamp'] <= time), beats[0])
-        next_beat = next((b for b in beats if b['timestamp'] > time), beats[-1])
-        
-        # If exactly on a beat, use its strength as a factor
-        if abs(time - prev_beat['timestamp']) < 0.001:
-            # Exactly on a beat, use a more pronounced effect
-            return prev_beat['strength']
-        
-        # Calculate linear progression between beats
-        if prev_beat['timestamp'] == next_beat['timestamp']:
-            # Handle edge case
-            return 0.5
-            
-        progress = (time - prev_beat['timestamp']) / (next_beat['timestamp'] - prev_beat['timestamp'])
-        
-        # Linear interpolation between beats
-        return progress
 
 
     # Generate frames

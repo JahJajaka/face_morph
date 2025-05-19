@@ -266,7 +266,7 @@ def main():
     parser = argparse.ArgumentParser(description='Extract beats and rhythmic features from audio file')
     parser.add_argument('--input', required=True, help='Input audio file path')
     parser.add_argument('--output', required=True, help='Output CSV file base path (without extension)')
-    parser.add_argument('--threshold', type=float, default=0.4, 
+    parser.add_argument('--threshold', type=float, default=0.2, 
                         help='Onset strength threshold (0.0-1.0)')
     parser.add_argument('--min_bpm', type=int, default=60, 
                         help='Minimum tempo in BPM')

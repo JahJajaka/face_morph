@@ -81,7 +81,9 @@ def crop_image_help(img1,img2):
 
 def generate_face_correspondences(theImage1, theImage2, img_paths):
     # Detect the points of face.
-    detector = dlib.get_frontal_face_detector()
+    hog_detector = dlib.get_frontal_face_detector()  # HOG-based (what you currently have)
+    cnn_detector = dlib.cnn_face_detection_model_v1('code/utils/mmod_human_face_detector.dat')  # CNN-based (more accurate)
+
     predictor = dlib.shape_predictor('code/utils/shape_predictor_68_face_landmarks.dat')
     corresp = np.zeros((68,2))
 
@@ -103,17 +105,17 @@ def generate_face_correspondences(theImage1, theImage2, img_paths):
         # second argument indicates that we should upsample the image 1 time. This
         # will make everything bigger and allow us to detect more faces.
         #print(img.shape)
-        dets = detector(img, 2)
+        dets = hog_detector(img, 2)
         
-        print(f'dets:{len(dets)}')
-        # try:
-        #     if len(dets) == 0:
-        #         raise NoFaceFound
-        # except NoFaceFound:
-        #     print("Sorry, but I couldn't find a face in the image.")
-        #     #cv2.imshow("no face", img)
-        #     #cv2.waitKey(0)
-            
+        print(f'HOG dets:{len(dets)}')
+
+        # If no face found, try CNN-based detector (more accurate but slower)
+        if len(dets) == 0:
+            print("HOG detector failed, trying CNN detector...")
+            cnn_dets = cnn_detector(img, 1)
+            # Convert CNN detector results to normal rectangles
+            dets = [d.rect for d in cnn_dets]
+            print(f'CNN dets:{len(dets)}')            
 
         j=j+1
         if len(dets) == 0:

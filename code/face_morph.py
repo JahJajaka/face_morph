@@ -6,6 +6,114 @@ import math
 from subprocess import Popen, PIPE
 from PIL import Image
 
+
+def generate_morph_sequence_with_beats(beat_file, img1, img2, points1, points2, tri_list, size, output, beat_start=None, beat_end=None):
+    """
+    Generate a morphing sequence synchronized with beats.
+    
+    Args:
+        beat_file (str): Path to the CSV file with beat information
+        img1, img2, points1, points2, tri_list, size: Same as in original function
+        output (str): Output video path
+        beat_start: Starting beat information for this segment
+        beat_end: Ending beat information for this segment
+    """
+    import csv
+    import numpy as np
+    from PIL import Image
+    from subprocess import Popen, PIPE
+    
+    # Calculate video parameters
+    if beat_start and beat_end:
+        print(f"Using specific beat segment: {beat_start['beat_number']} to {beat_end['beat_number']}")
+        # Calculate duration from the specific beats
+        segment_duration = beat_end['timestamp'] - beat_start['timestamp']
+        # Add a small buffer to ensure we reach the end beat
+        total_duration = segment_duration * 1.05
+
+    
+    print(f"total duration: {total_duration}")
+    # Frame rate should be high enough for smooth transitions
+    frame_rate = 30
+    num_frames = int(total_duration * frame_rate)    
+    # Start ffmpeg process
+    p = Popen([
+        'ffmpeg', '-y', '-f', 'image2pipe', '-r', str(frame_rate),
+        '-s', f"{size[1]}x{size[0]}", '-i', '-', 
+        '-c:v', 'libx264', '-crf', '25',
+        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+        '-pix_fmt', 'yuv420p', output
+    ], stdin=PIPE)
+    
+    # Convert images to float data type
+    img1 = np.float32(img1)
+    img2 = np.float32(img2)
+    
+    # Function to find alpha value at a given time
+    def get_alpha_at_time(time):
+        # Handle specific beat segment if provided
+        if beat_start and beat_end:
+            # Calculate adjusted time relative to the start beat
+            adjusted_time = beat_start['timestamp'] + time
+            
+            # Check if we're outside the range
+            if adjusted_time <= beat_start['timestamp']:
+                return 0.0
+            if adjusted_time >= beat_end['timestamp']:
+                return 1.0
+                
+            # Linear interpolation between start and end beat
+            progress = (adjusted_time - beat_start['timestamp']) / (beat_end['timestamp'] - beat_start['timestamp'])
+            return progress
+
+
+    # Generate frames
+    for frame_num in range(num_frames):
+        # Calculate current time
+        current_time = frame_num / frame_rate
+        
+        # Calculate alpha for this frame
+        alpha = get_alpha_at_time(current_time)
+        
+        # Ensure alpha stays within bounds
+        alpha = max(0.0, min(1.0, alpha))
+        
+        # Compute weighted average point coordinates
+        points = []
+        for i in range(0, len(points1)):
+            x = (1 - alpha) * points1[i][0] + alpha * points2[i][0]
+            y = (1 - alpha) * points1[i][1] + alpha * points2[i][1]
+            points.append((x, y))
+        
+        # Allocate space for final output
+        morphed_frame = np.zeros(img1.shape, dtype=img1.dtype)
+        
+        # Morph triangles
+        for i in range(len(tri_list)):
+            x = int(tri_list[i][0])
+            y = int(tri_list[i][1])
+            z = int(tri_list[i][2])
+            
+            t1 = [points1[x], points1[y], points1[z]]
+            t2 = [points2[x], points2[y], points2[z]]
+            t = [points[x], points[y], points[z]]
+            
+            morph_triangle(img1, img2, morphed_frame, t1, t2, t, alpha)
+        
+        # Save the frame to the video
+        res = Image.fromarray(cv2.cvtColor(np.uint8(morphed_frame), cv2.COLOR_BGR2RGB))
+        res.save(p.stdin, 'JPEG')
+        
+        # Print progress occasionally
+        if frame_num % 30 == 0:
+            print(f"Processed frame {frame_num}/{num_frames} at time {current_time:.2f}s (alpha: {alpha:.2f})")
+    
+    # Close the ffmpeg process
+    p.stdin.close()
+    p.wait()
+    print(f"Morphing complete. Output saved to: {output}")
+
+
 # Apply affine transform calculated using srcTri and dstTri to src and
 # output an image of size.
 def apply_affine_transform(src, srcTri, dstTri, size) :

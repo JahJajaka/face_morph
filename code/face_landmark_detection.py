@@ -8,6 +8,8 @@ import cv2
 from imutils import face_utils
 #DEFECTED = ['165.jpg', '177.jpg', '185.jpg', '186.jpg', '190.jpg', '199.jpg', '202.jpg', '206.jpg']
 DEFECTED = []
+
+
 class NoFaceFound(Exception):
    """Raised when there is no face found"""
    pass
@@ -22,7 +24,7 @@ def calculate_margin_help(img1,img2):
 
     return [size1,size2,diff0,diff1,avg0,avg1]
 
-def crop_image(img1,img2):
+def crop_image_old(img1,img2):
     [size1,size2,diff0,diff1,avg0,avg1] = calculate_margin_help(img1,img2)
     
     if(size1[0] == size2[0] and size1[1] == size2[1]):
@@ -57,6 +59,22 @@ def crop_image(img1,img2):
         #print("ou bien")
         return [img1[:,diff1:avg1],img2[abs(diff0):avg0,:]]
 
+
+def crop_image(img1,img2):
+    # Get the max dimensions for both images
+    max_height = max(img1.shape[0], img2.shape[0])
+    max_width = max(img1.shape[1], img2.shape[1])
+    
+    # Create standardized size image with the same aspect ratio
+    target_height = max_height
+    target_width = max_width
+    
+    # Resize both images to the target size
+    img1_resized = cv2.resize(img1, (target_width, target_height), interpolation=cv2.INTER_AREA)
+    img2_resized = cv2.resize(img2, (target_width, target_height), interpolation=cv2.INTER_AREA)
+    
+    return [img1_resized, img2_resized]
+
 def crop_image_help(img1,img2):
     [size1,size2,diff0,diff1,avg0,avg1] = calculate_margin_help(img1,img2)
     #print(size1,size2,diff0,diff1,avg0,avg1)
@@ -81,7 +99,9 @@ def crop_image_help(img1,img2):
 
 def generate_face_correspondences(theImage1, theImage2, img_paths):
     # Detect the points of face.
-    detector = dlib.get_frontal_face_detector()
+    hog_detector = dlib.get_frontal_face_detector()  # HOG-based (what you currently have)
+    cnn_detector = dlib.cnn_face_detection_model_v1('code/utils/mmod_human_face_detector.dat')  # CNN-based (more accurate)
+
     predictor = dlib.shape_predictor('code/utils/shape_predictor_68_face_landmarks.dat')
     corresp = np.zeros((68,2))
 
@@ -103,17 +123,35 @@ def generate_face_correspondences(theImage1, theImage2, img_paths):
         # second argument indicates that we should upsample the image 1 time. This
         # will make everything bigger and allow us to detect more faces.
         #print(img.shape)
-        dets = detector(img, 2)
+        #dets = hog_detector(img, 2)
+
+        #print(f'HOG dets:{len(dets)}')
+
+        # If no face found, try CNN-based detector (more accurate but slower)
+        # if len(dets) == 0:
+        #     # print("HOG detector failed, trying CNN detector...")
+        #     # cnn_dets = cnn_detector(img, 1)
+        #     # # Convert CNN detector results to normal rectangles
+        #     # dets = [d.rect for d in cnn_dets]
+        #     # print(f'CNN dets:{len(dets)}')            
+        print("Using CNN detector as fallback...")
+        # Using CNN detector with lower resolution for speed
+        scaled_img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+        cnn_dets = cnn_detector(scaled_img, 0)  # No upsampling
         
-        print(f'dets:{len(dets)}')
-        # try:
-        #     if len(dets) == 0:
-        #         raise NoFaceFound
-        # except NoFaceFound:
-        #     print("Sorry, but I couldn't find a face in the image.")
-        #     #cv2.imshow("no face", img)
-        #     #cv2.waitKey(0)
-            
+        # Convert and adjust coordinates back to original resolution
+        if len(cnn_dets) > 0:
+            dets = []
+            for d in cnn_dets:
+                # Scale back to original image dimensions
+                rect = dlib.rectangle(
+                    d.rect.left()*2, 
+                    d.rect.top()*2,
+                    d.rect.right()*2, 
+                    d.rect.bottom()*2
+                )
+                dets.append(rect)
+            print(f'CNN dets (scaled back):{len(dets)}')
 
         j=j+1
         if len(dets) == 0:

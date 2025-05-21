@@ -11,7 +11,8 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir \
     scikit_image \
     opencv_python \
     Pillow \
-    imutils
+    imutils \
+    librosa
     #skimage \
 RUN pip install dlib 
 COPY . /face_morph

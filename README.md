@@ -1,42 +1,37 @@
-# face-morphing-multiple-images
+# Face Morphing Multiple Images Syncronized With Audio
 
-Credit to: https://github.com/Azmarie/Face-Morphing 
-
-This repo is an upgrade where we can morph multiple images into video.
-
-Check out Azmarie's repo first to understand all the details.
+All images in the folder morphed from one to another until the last one. The duration of morphing is syncronized with extracted beat structure.
 
 # Execution
 
-1. Place your images in a folder, for example ```raw_images```
-2. Use the command ```python code/utils/align_images.py raw_images/ aligned_images/ --output_size=1024``` to select images from "raw_images" with a face and align/rotate them and put them in "aligned_images".
+1. Place .mp3 file in the code folder. 
+2. To extract beats run:
+
+```python code/beat_extraction.py --input sigma_boy.mp3 --output beats.csv```
+
+N.B: adjust --threshold parameter to get number of beats roughly equal number of transformations
+
 3. Launch the command to create the video : 
 
-```python code/__init__.py --folder aligned_images --output video_output.mp4 --duration 4```
+```python code/__init__.py --folder aligned_images/ --beats code/beats.csv --output morphed_sequence.mp4```
 
 Note that this will create temporary videos (```--tmpfolder```) and then combine them into one video (```--output```).
 
-Results :
-
-![ezgif-3-0130e3d9d289](https://user-images.githubusercontent.com/24222091/117420318-c04b3a00-af1d-11eb-84e7-053160089619.gif)
-
-
-
-# Details to call code/__init__.py
-- ```--img1``` : The First Image (not necessary when ```--folder``` is used)
-- ```--img2``` : The Second Image (not necessary when ```--folder``` is used)
-- ```--folder``` : The folder with all images to morph (not necessary when ```--img1``` and ```--img2``` are used)
-- ```--duration``` : The duration of morphing from one image to the other.
-- ```--frame``` : The frame rate of the encoding.
-- ```--output``` : Final video path.
-- ```--tmpfolder``` : Folder to store intermediate videos.
-
-# How it works on multiple videos?
+## How it works on multiple videos?
 1. The program goes through all the images in ```--folder``` with a for loop
 2. For each 2 images we apply what was done by Azmarie's original repo and this outputs a video. We store them in ```--tmpfolder```
 3. We append to a text file named ```imageslist.txt``` the names of the videos like so : ```file '<filename_of_the_video>'```
 4. After dealing with all images we can encode one big video using ```imageslist.txt``` and the right ffmpeg command:
 
 ```ffmpeg -f concat -safe 0 -i imageslist.txt -c copy output.mp4```
+5. If process was interupted for some reason it will be resumed from the latest found segment of video
 
-*Note: This is not the most optimized way to do it but it works. It would be better to directly encode one video but it would be a lot of work on Azmarie's work to do.*
+# Details to call code/__init__.py
+
+- ```--folder``` : The folder with all images to morph
+- ```--duration``` : The duration of morphing from one image to the other.
+- ```--frame``` : The frame rate of the encoding.
+- ```--output``` : Final video path.
+- ```--tmpfolder``` : Folder to store intermediate videos.
+- ```--beats``` : Path to csv file with extracted beats
+- ```--beat_interval``` : Use only every Nth beat instead of each one

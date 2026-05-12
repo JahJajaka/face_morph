@@ -1,37 +1,132 @@
-# Face Morphing Multiple Images Syncronized With Audio
+# Face Morph (MediaPipe)
 
-All images in the folder morphed from one to another until the last one. The duration of morphing is syncronized with extracted beat structure.
+Создаёт плавное морфинг-видео из последовательности фотографий лиц,
+синхронизированное с музыкальной дорожкой. Использует MediaPipe FaceMesh
+для разметки 478 лицевых точек, триангуляцию Делоне на усреднённой форме
+и косинусное сглаживание интерполяции.
 
-# Execution
+> Старая dlib-версия осталась на ветке `main`. Эта ветка (`mediapipe`) —
+> переписанный пайплайн с новыми возможностями.
 
-1. Place .mp3 file in the code folder. 
-2. To extract beats run:
+## Что нового
 
-```python code/beat_extraction.py --input sigma_boy.mp3 --output beats.csv```
+- **MediaPipe FaceMesh** вместо dlib (478 точек вместо 68, без бинарных моделей)
+- **Фиксированная триангуляция** на средней форме — устраняет рывки между кадрами
+- **Косинусное сглаживание** интерполяции
+- **Авто-fallback при сложных лицах:**
+  - Свип углов поворота (±15°…±90°) с выбором по «лицеподобности»
+  - Crop-режим через `face_detection` — для маленьких/далёких лиц
+  - Ручное переопределение через sidecar-файлы рядом с фото
+- **Звукосинхронный монтаж** — пауза в начале, удержание последнего кадра
+- **Beat-аналитика** трека (librosa) для ручной разметки эффектов
 
-N.B: adjust --threshold parameter to get number of beats roughly equal number of transformations
+## Быстрый старт (Docker)
 
-3. Launch the command to create the video : 
+```bash
+mkdir images
+cp /path/to/your/photos/*.jpg images/
+cp /path/to/your_song.mp3 music.mp3
 
-```python code/__init__.py --folder aligned_images/ --beats code/beats.csv --output morphed_sequence.mp4```
+docker compose up --build
+# результат: morph_results/morph_final.mp4
+```
 
-Note that this will create temporary videos (```--tmpfolder```) and then combine them into one video (```--output```).
+Параметры пайплайна редактируются в `docker-compose.yml` (раздел `command`):
 
-## How it works on multiple videos?
-1. The program goes through all the images in ```--folder``` with a for loop
-2. For each 2 images we apply what was done by Azmarie's original repo and this outputs a video. We store them in ```--tmpfolder```
-3. We append to a text file named ```imageslist.txt``` the names of the videos like so : ```file '<filename_of_the_video>'```
-4. After dealing with all images we can encode one big video using ```imageslist.txt``` and the right ffmpeg command:
+| Флаг | Назначение |
+|---|---|
+| `--input` | glob входных фото (отсортирован по имени) |
+| `--steps` | кадров на один морф между парой фото |
+| `--fps` | FPS итогового видео |
+| `--pause` | кадров удержания первого фото в начале |
+| `--tail` | кадров удержания последнего фото в конце |
+| `--effects` | путь к JSON со списком эффектов на бите |
 
-```ffmpeg -f concat -safe 0 -i imageslist.txt -c copy output.mp4```
-5. If process was interupted for some reason it will be resumed from the latest found segment of video
+## Тонкая настройка для проблемных фото
 
-# Details to call code/__init__.py
+### Лицо под углом / лицом не вперёд
 
-- ```--folder``` : The folder with all images to morph
-- ```--duration``` : The duration of morphing from one image to the other.
-- ```--frame``` : The frame rate of the encoding.
-- ```--output``` : Final video path.
-- ```--tmpfolder``` : Folder to store intermediate videos.
-- ```--beats``` : Path to csv file with extracted beats
-- ```--beat_interval``` : Use only every Nth beat instead of each one
+Свип углов поворота отрабатывает автоматически. Если хочется зафиксировать
+конкретный угол — положи рядом с фото `<image>.angle.txt` с числом градусов.
+
+### Маленькое/далёкое лицо
+
+MediaPipe FaceDetection пытается найти bounding box, но для очень мелких
+лиц может не найти. Тогда:
+
+```bash
+python bbox_tool.py images/342.jpg
+# нарисуй прямоугольник вокруг лица, Enter
+# создаст images/342.jpg.bbox.json
+```
+
+При следующем прогоне пайплайн закропит указанный регион и натравит на него FaceMesh.
+
+### Лицо вообще не детектится
+
+Полностью ручная разметка ключевых точек:
+
+```bash
+python annotate.py images/foo.jpg
+# кликаешь точки в подсказанном порядке
+# создаёт images/foo.jpg.landmarks.json
+```
+
+## Эффекты на бите
+
+```bash
+# 1) Анализ трека: получаем waveform + карту сильных пиков
+pip install librosa matplotlib
+python analyze_beats.py music.mp3
+# создаст morph_results/beats.json + beats.png
+
+# 2) Открой beats.png, выбери моменты, обнови effects.json
+# 3) Пересобери видео из готовых кадров (быстро, без пересчёта морфа)
+docker compose run --rm face-morph python rebuild_video.py \
+  --sequence morph_results/sequence --output morph_results \
+  --pause 120 --tail 59 --fps 30 --effects effects.json
+```
+
+Формат `effects.json`:
+
+```json
+{
+  "effects": [
+    {"frame": 165, "type": "zoom_punch",       "magnitude": 0.20},
+    {"frame": 2010, "type": "zoom_punch_color", "magnitude": 0.20}
+  ]
+}
+```
+
+Лучше всего ставить эффект на кадр, где новое фото «садится» в фокус
+(alpha морфа = 1.0). При шаге 45 кадров и стартовой паузе 120 фото `k+1`
+ложится в кадр `120 + k*45`.
+
+## Утилиты
+
+| Скрипт | Что делает |
+|---|---|
+| `main.py` | Основной пайплайн: читает фото, морфит, собирает видео |
+| `annotate.py` | Ручная разметка лицевых точек (нужен GUI cv2 на хосте) |
+| `bbox_tool.py` | Рисование bbox для маленьких лиц (нужен GUI cv2 на хосте) |
+| `debug_landmarks.py` | Отрисовка детектированных точек на одном фото |
+| `analyze_beats.py` | Beat-детекция трека (librosa) |
+| `rebuild_video.py` | Быстрая пересборка видео из готовых морф-кадров |
+
+## Зависимости
+
+Основной пайплайн (`main.py` + утилиты Docker):
+
+- mediapipe
+- opencv-python
+- numpy
+- tqdm
+
+Дополнительно для анализа битов на хосте:
+
+- librosa
+- matplotlib
+
+## Лицензия
+
+MIT — см. `LICENSE`.

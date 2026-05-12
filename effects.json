@@ -1,0 +1,11 @@
+{
+  "_comment": "Beat-aligned to morph landings (alpha=1.0 moments) so the zoom peak coincides with a photo settling into focus. Magnitude 0.20 = punchy.",
+  "effects": [
+    {"frame": 165,  "type": "zoom_punch",       "magnitude": 0.20, "_at": "5.50s — photo 2 lands (beat at 5.32)"},
+    {"frame": 345,  "type": "zoom_punch",       "magnitude": 0.20, "_at": "11.50s — photo 6 lands (beats at 10.63 + 11.40)"},
+    {"frame": 435,  "type": "zoom_punch",       "magnitude": 0.20, "_at": "14.50s — photo 8 lands (beat at 14.44)"},
+    {"frame": 1020, "type": "zoom_punch",       "magnitude": 0.20, "_at": "34.00s — photo 21 lands (beat dead-on)"},
+    {"frame": 1560, "type": "zoom_punch",       "magnitude": 0.20, "_at": "52.00s — photo 33 lands (beat at 52.04)"},
+    {"frame": 2010, "type": "zoom_punch_color", "magnitude": 0.20, "_at": "67.00s — photo 43 lands (beat at 67.41)"}
+  ]
+}

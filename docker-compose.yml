@@ -1,8 +1,24 @@
-version: '3.8'
 services:
-  face_morph:
-    build:
-      context: .
-    tty: true
+  face-morph:
+    build: .
     volumes:
-      - /Users/ec/Documents/repos/face_morph:/face_morph
+      # Put your input photos in ./images (or change the mount and --input glob below).
+      - ./images:/app/images
+      - ./morph_results:/app/morph_results
+      # Music file used for the final muxed video. Replace `music.mp3` on the host
+      # with whatever you want — the path inside the container stays /app/music.mp3.
+      - ./music.mp3:/app/music.mp3
+      - ./effects.json:/app/effects.json
+    command:
+      - /bin/bash
+      - -c
+      - |
+        python main.py \
+          --input 'images/*.jpg' \
+          --output morph_results \
+          --steps 45 --fps 30 \
+          --pause 120 --tail 59 \
+          --effects effects.json &&
+        ffmpeg -y -i morph_results/morph_video.mp4 -i music.mp3 \
+          -t 00:01:12 -c:v copy -c:a aac \
+          morph_results/morph_final.mp4
